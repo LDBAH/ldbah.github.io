@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#1d2a22">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -294,6 +294,11 @@ button.modeBadge.pick:hover{filter:brightness(1.12)}
 @media (max-width:600px){.topbar{padding-top:calc(6px + env(safe-area-inset-top));padding-left:max(10px, env(safe-area-inset-left));padding-right:max(10px, env(safe-area-inset-right))}}
 body{padding-bottom:env(safe-area-inset-bottom)}
 @media (max-width:860px){#sidebar{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}}
+/* ---------- app-like touch: no double-tap / pinch zoom, no tap flash, no long-press menus ---------- */
+html,body{touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+*{-webkit-tap-highlight-color:transparent}
+button,.topbar,#board,#boardWrap,#controls,.navItem,.viewTab,.seg{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+img,svg{-webkit-touch-callout:none;-webkit-user-drag:none}
 .progBtns{display:flex;gap:6px}
 .progBtns button{flex:1;border:1px solid var(--line);background:var(--chip);color:var(--ink);padding:8px 6px;border-radius:8px;cursor:pointer;font-weight:600;min-height:38px}
 </style>
@@ -2357,6 +2362,10 @@ window.__LINES = () => LINES; window.__firstKid = () => LINES.findIndex(l => l.r
       location.reload();
     } catch (e) { alert('Could not import: ' + e.message); }
   };
+  // iOS ignores user-scalable=no, so block pinch-zoom explicitly (double-tap zoom is stopped by touch-action:manipulation)
+  ['gesturestart','gesturechange','gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+  document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+  document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
   if (location.protocol.startsWith('http')) {
     if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
