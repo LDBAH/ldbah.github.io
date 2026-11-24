@@ -848,7 +848,7 @@ body.readAid #panel .fx,body.readAid .bkText .fx,.lgTx .fx{font-weight:700}
 /* notation: neutral ink, dotted underline; colour only appears on the board when tapped */
 #panel .nt,.lgTx .nt{text-decoration-color:color-mix(in srgb,#1c1c1c 50%,transparent) !important;padding:3px 2px;margin:-3px -2px;border-radius:6px}
 #panel .nt.mvn,.lgTx .nt.mvn{font-weight:700}
-#panel .nt.on,#panel .nt.on[class*="c-"]{background:color-mix(in srgb,#c2410c 16%,transparent) !important;text-decoration-color:#c2410c !important}
+#panel .nt.on,#panel .nt.on[class*="c-"]{background:color-mix(in srgb,#22c55e 20%,transparent) !important;text-decoration-color:#20a24f !important}
 #panel{touch-action:manipulation}
 /* the two accent colours, used once per text block */
 .key{color:#c2410c;font-weight:700}
@@ -857,6 +857,16 @@ body.readAid #panel .fx,body.readAid .bkText .fx,.lgTx .fx{font-weight:700}
 html.standalone,html.standalone body{height:100vh}
 html.standalone .screen{bottom:auto;height:100vh}
 @media (display-mode: standalone){html,body{height:100vh}.screen{bottom:auto;height:100vh}}
+
+/* ---- v7.3: Chessigma-style key phrases (green = the idea, red = the danger) ---- */
+.kp{--sc:#22c55e;--si:#1e9a4b;font-weight:650;color:var(--si);cursor:pointer;border-radius:4px;-webkit-box-decoration-break:clone;box-decoration-break:clone;
+  background:linear-gradient(transparent 60%,color-mix(in srgb,var(--sc) 24%,transparent) 0);padding:0 1px;transition:background .15s}
+.kp.r{--sc:#ef4444;--si:#dc2626}
+.kp.on{background:color-mix(in srgb,var(--sc) 22%,transparent)}
+.kp .nt{color:inherit}
+#panel .bkQuote .kp{font-style:italic}
+.key,.warn{color:inherit;font-weight:inherit}
+.lgTx .kp{cursor:default}
 </style>
 </head>
 <body>
@@ -966,8 +976,8 @@ html.standalone .screen{bottom:auto;height:100vh}
         <h4>Text in the bubbles</h4>
         <div class="lgGrid">
           <div class="lgRow"><span class="lgTx"><span class="nt mvn">Ne5</span></span><div><b>Dotted underline</b>: a move or square. Tap it (or close to it) to see it on the board.</div></div>
-          <div class="lgRow"><span class="lgTx"><span class="key">outpost</span></span><div><b>Orange</b>: the one core idea of the text (at most one per bubble part)</div></div>
-          <div class="lgRow"><span class="lgTx"><span class="warn">threat</span></span><div><b>Red</b>: the one thing to watch out for</div></div>
+          <div class="lgRow"><span class="lgTx"><span class="kp g">a knight on e5</span></span><div><b>Green phrase</b>: the key idea of the paragraph. Tap it to light up its squares.</div></div>
+          <div class="lgRow"><span class="lgTx"><span class="kp r">the b2-pawn hangs</span></span><div><b>Red phrase</b>: the danger to watch out for</div></div>
           <div class="lgRow"><span class="lgTx"><b>Fix</b>ation</span><div><b>Bold word starts</b> guide the eye (off by default, switch on below)</div></div>
         </div>
       </div>
@@ -1849,7 +1859,7 @@ function computeSq() {
 const sqXY = i => S.flip ? [(7 - (i & 7)) * S.sq, (i >> 3) * S.sq] : [(i & 7) * S.sq, (7 - (i >> 3)) * S.sq];
 
 function drawBoard(opts) {
-  if (!opts.__nt) { boardBase = opts; ntOn = null; }
+  if (!opts.__nt) { boardBase = opts; ntOn = null; segOn = null; }
   boardState = Object.assign({ pos: null, shapes: '', last: null, quality: null, selected: -1, dots: [], hl: [] }, opts);
   const { pos } = boardState;
   boardEl.innerHTML = '';
@@ -1916,6 +1926,13 @@ function drawShapes(shapes) {
   }
   svg.appendChild(defs);
   const cxy = i => S.flip ? [7 - (i & 7) + 0.5, (i >> 3) + 0.5] : [(i & 7) + 0.5, 7 - (i >> 3) + 0.5];
+  for (const s of list) {
+    if (s.type !== 'fill') continue;
+    const [x, y] = cxy(s.sq), r = document.createElementNS(NS, 'rect');
+    r.setAttribute('x', x - 0.5); r.setAttribute('y', y - 0.5); r.setAttribute('width', 1); r.setAttribute('height', 1);
+    r.setAttribute('fill', COLORS[s.c]); r.setAttribute('opacity', 0.42); r.setAttribute('class', 'segFill');
+    svg.appendChild(r);
+  }
   for (const s of list) {
     if (s.type === 'circle') {
       const [x, y] = cxy(s.sq);
@@ -2013,7 +2030,7 @@ const panel = $('#panel'), controls = $('#controls'), header = $('#lineHeader');
   const coach = panel.closest('.coach');
   const sync = () => coach.classList.toggle('scrolled', panel.scrollTop > 6);
   panel.addEventListener('scroll', sync, { passive: true });
-  new MutationObserver(() => { panel.scrollTop = 0; sync(); fixate(panel); }).observe(panel, { childList: true });
+  new MutationObserver(() => { panel.scrollTop = 0; sync(); annotate(panel); fixate(panel); }).observe(panel, { childList: true });
 }
 const icon = id => `<svg><use href="#i-${id}"/></svg>`;
 function mkBtn(b) {
@@ -2246,14 +2263,88 @@ function richText(html, shapes) {
       }
       return m;
     });
-    // one core concept and one warning per block, outside notation
-    return part.split(/(<span class="nt[^>]*>[^<]*<\/span>)/).map((seg, j) => {
-      if (j % 2) return seg;
-      if (!core) seg = seg.replace(CORE_RX, w => { core = true; return `<span class="key">${w}</span>`; });
-      if (!warn) seg = seg.replace(WARN_RX, w => { warn = true; return `<span class="warn">${w}</span>`; });
-      return seg;
-    }).join('');
+    return part;
   }).join('');
+}
+// Key phrases, Chessigma style: one phrase per paragraph in semibold, green for the idea, red for the danger.
+// Tapping the phrase lights up its squares on the board.
+const SEG_RED = /\b(gets? (?:kicked|chased|pinned|trapped|hit|forked)|blunder\w*|hangs?|hanging|loses?|losing|lost|danger\w*|threat\w*|undefended|unprotected|trapped|stalemate|careful|beware|mistake|cramped|passive|walks? into|runs? into|poisoned|too (?:slow|early|late)|no longer|don[’']t|never|avoid|weak(?:ens?|ness|nesses)?|draw)\b/i;
+const SEG_TIERS = [
+  ['forks?', 'pins?', 'pinned', 'skewers?', 'sacrific\\w*', 'checkmate', 'mates?', 'traps?', 'discovered (?:attack|check)', 'double attack', 'zugzwang',
+   'wins? (?:a |the |back )?(?:pawn|piece|queen|rook|knight|bishop|exchange|material|tempo)', 'breakthrough', 'opposition', 'queens? first', 'promot\\w*'],
+  ['outposts?', 'pawn break', 'break', 'bishop pair', 'passed pawn', 'open(?:s|ing)? (?:the )?[a-h]?-?file', 'half-open', 'long diagonal', 'pawn storm', 'fianchetto', 'initiative',
+   'bridge', 'pyramid', 'attack\\w*', 'pressure', 'counterplay', 'plan', 'idea', 'hit back', 'strike', 'kick\\w*', 'chase\\w*', 'targets?', 'grip', 'clamp', 'lock\\w*', 'race'],
+  ['centre', 'center', 'space', 'develop\\w*', 'castl\\w*', 'king safety', 'strong\\w*', 'active', 'control\\w*', 'support\\w*', 'defend\\w*', 'protect\\w*', 'free\\w*', 'tempo', 'rule', 'principle', 'retreat', 'home', 'safe']
+].map(L => new RegExp('\\b(' + L.join('|') + ')\\b', 'i'));
+const SEG_STOP = /^(?:and|but|so|or|then|which|that|because|while|if|when)\s+/i;
+function segRange(t) {
+  let m = SEG_RED.exec(t), col = 'r';
+  if (!m) { col = 'g'; for (const rx of SEG_TIERS) { m = rx.exec(t); if (m) break; } }
+  if (!m) return null;
+  const k = m.index;
+  // the clause around the hit: between , ; : ( ) — – or sentence ends (a dot followed by a space)
+  const isB = i => /[,;:—–!?]/.test(t[i]) || (t[i] === '.' && (i + 1 >= t.length || /\s/.test(t[i + 1])));
+  let s = k; while (s > 0 && !isB(s - 1)) s--;
+  let e = k + m[0].length; while (e < t.length && !isB(e)) e++;
+  let cl = t.slice(s, e);
+  const lead = cl.length - cl.replace(/^\s+/, '').length; s += lead; cl = cl.trim(); e = s + cl.length;
+  const st = cl.match(SEG_STOP); if (st && s + st[0].length <= k) { s += st[0].length; cl = cl.slice(st[0].length); }
+  // long clause: keep the hit and up to three words on each side
+  if (cl.split(/\s+/).length > 9) {
+    const ws = [], re = /\S+/g, sub = t.slice(s, e); let mm;
+    while ((mm = re.exec(sub))) ws.push([s + mm.index, s + mm.index + mm[0].length]);
+    const hi = ws.findIndex(w => w[1] > k), hj = ws.findIndex(w => w[1] >= k + m[0].length);
+    s = ws[Math.max(0, hi - 3)][0]; e = ws[Math.min(ws.length - 1, (hj < 0 ? hi : hj) + 3)][1];
+  }
+  while (e > s && /[\s.,]/.test(t[e - 1])) e--;
+  return e - s >= 2 ? { s, e, col } : null;
+}
+function segPoint(p, off) {
+  const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT); let n, acc = 0;
+  while ((n = w.nextNode())) { const L = n.nodeValue.length; if (off <= acc + L) return [n, off - acc]; acc += L; }
+  return null;
+}
+function segSnap(p, pt, start) {
+  let [node, off] = pt;
+  while (node !== p) {
+    const host = node.nodeType === 3 ? node.parentElement : node;
+    if (!host || host === p) break;
+    const len = node.nodeType === 3 ? node.nodeValue.length : node.childNodes.length;
+    const edge = start ? off === 0 : off === len;
+    if (!(edge || host.closest('.nt'))) break;
+    const par = host.parentNode, idx = [...par.childNodes].indexOf(host);
+    node = par; off = start ? idx : idx + 1;
+  }
+  return [node, off];
+}
+function annotate(root) {
+  if (!root) return;
+  root.querySelectorAll('p, li, .bkText, .bkQText').forEach(p => {
+    if (p.dataset.seg || p.closest('button, .mlist, .explHead, .qExp .muted') || p.querySelector('.kp')) return; p.dataset.seg = 1;
+    const t = p.textContent; if (t.length < 25) return;
+    const r = segRange(t); if (!r) return;
+    const a = segPoint(p, r.s), b = segPoint(p, r.e); if (!a || !b) return;
+    try {
+      const rg = document.createRange(), [sn, so] = segSnap(p, a, true), [en, eo] = segSnap(p, b, false);
+      rg.setStart(sn, so); rg.setEnd(en, eo);
+      const span = document.createElement('span'); span.className = 'kp ' + r.col;
+      span.appendChild(rg.extractContents()); rg.insertNode(span);
+    } catch (e) { /* leave the paragraph as it is */ }
+  });
+}
+let segOn = null;
+function segShow(node) {
+  document.querySelectorAll('.kp.on, .nt.on').forEach(x => x.classList.remove('on'));
+  if (!boardBase) return;
+  const keep = boardBase; ntOn = null;
+  if (segOn === node) { segOn = null; drawBoard(keep); return; }
+  const c = node.classList.contains('r') ? 'R' : 'G', base = typeof keep.shapes === 'string' ? parseShapes(keep.shapes) : (keep.shapes || []).slice();
+  const sqs = new Set();
+  node.querySelectorAll('.nt').forEach(n => { const tg = ntTarget(n.dataset.n || n.textContent); if (tg) sqs.add(tg.move ? tg.move.to : tg.sq); if (tg && tg.move) sqs.add(tg.move.from); });
+  if (!sqs.size) base.forEach(s => { if (s.c === c) sqs.add(s.type === 'arrow' ? s.to : s.sq); });
+  if (!sqs.size) base.forEach(s => sqs.add(s.type === 'arrow' ? s.to : s.sq));
+  drawBoard(Object.assign({}, keep, { shapes: base.concat([...sqs].map(sq => ({ type: 'fill', c, sq }))), __nt: 1 }));
+  segOn = node; node.classList.add('on');
 }
 // Fixation points: bold the first letters of each word (can be switched off in Settings)
 const FIX_SKIP = ['B', 'STRONG', 'BUTTON', 'SUP', 'SMALL', 'SCRIPT', 'STYLE', 'CITE'];
@@ -2290,13 +2381,13 @@ function ntTarget(tok) {
   return sq ? { sq: C.sqIdx(sq[1]) } : null;
 }
 function ntShow(node) {
-  const was = ntOn;
+  const was = ntOn; segOn = null; document.querySelectorAll('.kp.on').forEach(x => x.classList.remove('on'));
   document.querySelectorAll('.nt.on').forEach(x => x.classList.remove('on'));
   if (!boardBase) return;
   const keep = boardBase;
   if (was === node) { drawBoard(keep); return; }
   const tg = ntTarget(node.dataset.n || node.textContent); if (!tg) return;
-  const c = (node.className.match(/c-([GBRYO])/) || [0, 'O'])[1];
+  const c = (node.className.match(/c-([GR])/) || [0, 'G'])[1];
   const base = typeof keep.shapes === 'string' ? parseShapes(keep.shapes) : (keep.shapes || []).slice();
   const extra = tg.move ? [{ type: 'arrow', c, from: tg.move.from, to: tg.move.to, thick: true }, { type: 'circle', c, sq: tg.move.to }] : [{ type: 'circle', c, sq: tg.sq }];
   drawBoard(Object.assign({}, keep, { shapes: base.concat(extra), __nt: 1 }));
@@ -2312,7 +2403,12 @@ function ntNear(e) {
     const d = Math.hypot(dx, dy * 1.6); if (d < bd) { bd = d; best = n; } } });
   return best;
 }
-document.addEventListener('click', e => { const n = ntNear(e); if (n) { e.preventDefault(); e.stopPropagation(); ntShow(n); } });
+document.addEventListener('click', e => {
+  const hitNt = e.target.closest && e.target.closest('#panel .nt');
+  const sg = !hitNt && e.target.closest && e.target.closest('#panel .kp');
+  if (sg) { e.preventDefault(); e.stopPropagation(); segShow(sg); return; }
+  const n = ntNear(e); if (n) { e.preventDefault(); e.stopPropagation(); ntShow(n); }
+});
 
 /* ================= STUDY (look closer: step through with every arrow) ================= */
 function startStudy(li, ply = 0) {
@@ -3839,7 +3935,7 @@ function bkCardHead(card, done) {
   return `<div class="explHead"><span class="tag ${card.t === 'move' ? 'go' : ''}">${T}</span><span class="xpTag ${done ? 'got' : ''}">${done ? '✓ ' + S.prog.bk[bkKey(S.bk.b, S.bk.c, S.bk.k)] : '+' + XP} XP</span></div>`;
 }
 function bkQuote(q, shapes) {
-  return `<blockquote class="bkQuote">${richText(q, shapes)}<cite>${BOOKSX[S.bk.b].cite || ''}</cite></blockquote>`;
+  return `<blockquote class="bkQuote"><span class="bkQText">${richText(q, shapes)}</span><cite>${BOOKSX[S.bk.b].cite || ''}</cite></blockquote>`;
 }
 function renderBookCard(msg) {
   const v = S.bk, B = BOOKSX[v.b], ch = B.chapters[v.c], card = ch.cards[v.k], n = ch.cards.length;
@@ -3887,7 +3983,7 @@ function renderBookCard(msg) {
       tries++;
       if (i === card.a) {
         bt.classList.add('right'); panel.querySelectorAll('.qOpt').forEach(x => x.disabled = true);
-        panel.querySelector('.qExp').innerHTML = `<p><b>✓ Right.</b> ${richText(card.explain || '')}</p>`; fixate(panel);
+        panel.querySelector('.qExp').innerHTML = `<p><b>✓ Right.</b> ${richText(card.explain || '')}</p>`; annotate(panel); fixate(panel);
         bkAward(tries === 1 ? 10 : 4);
         setNav({ disabled: true }, { label: 'Next ▶', cls: 'primary', onClick: bkNext }, prev, Object.assign({}, next, { disabled: false }));
       } else { bt.classList.add('wrong'); panel.querySelector('.qExp').innerHTML = '<p class="muted">Not this one. Try another answer.</p>'; }
@@ -3938,7 +4034,7 @@ function bkSolved(shown) {
   if (!shown) bkAward(v.wrong || v.hint ? 8 : 15);
   const pr = panel.querySelector('.bkPrompt');
   if (pr) pr.outerHTML = `<div class="bkAfter"><p><b>${shown ? 'The answer' : '✓ Solved'}:</b> ${richText(card.solSan)}</p>${card.after ? `<p>${richText(card.after)}</p>` : ''}</div>`;
-  fixate(panel);
+  annotate(panel); fixate(panel);
   setNav({ disabled: true }, { label: 'Next ▶', cls: 'primary', onClick: bkNext }, { title: 'Previous card', onClick: bkPrev }, { title: 'Next card', onClick: bkNext });
 }
 function bkShowAnswer() {
