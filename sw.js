@@ -1,6 +1,6 @@
 // Offline cache for the London System Trainer.
 // After changing ANY file, bump VERSION so installed copies pick up the update.
-const VERSION = 'v6';
+const VERSION = 'v7.1';
 const CACHE = 'london-trainer-' + VERSION;
 const FILES = [
   './',
