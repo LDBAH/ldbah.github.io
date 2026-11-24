@@ -838,6 +838,25 @@ body.readAid #panel .fx,body.readAid .bkText .fx,.lgTx .fx{font-weight:700}
 #panel .pgDots span{margin-left:6px;font-size:11.5px;color:#6b6b6b}
 #panel .pgH{font-weight:700;margin:4px 0 2px;color:#7a5200}
 @media (max-width:900px){.topZone{flex:1.6 1 0}.botZone{flex:1 1 0}body.readCard .topZone{flex:2.6 1 0}}
+
+/* ---- v7.2 ---- */
+/* Daumier: below the fold, fades and slides in while you scroll to it */
+.daumier{height:auto;aspect-ratio:4/3;cursor:default;opacity:calc(var(--rv,0) * .95);filter:saturate(calc(.4 + .45 * var(--rv,0)));transform:translateY(calc((1 - var(--rv,0)) * 48px)) scale(calc(.94 + .06 * var(--rv,0)));transition:none;margin-bottom:18px}
+.daumier img{object-position:50% 50%}
+:root[data-mode=light] .daumier{opacity:calc(var(--rv,0) * .95)}
+.daumier.open{height:auto}
+/* notation: neutral ink, dotted underline; colour only appears on the board when tapped */
+#panel .nt,.lgTx .nt{text-decoration-color:color-mix(in srgb,#1c1c1c 50%,transparent) !important;padding:3px 2px;margin:-3px -2px;border-radius:6px}
+#panel .nt.mvn,.lgTx .nt.mvn{font-weight:700}
+#panel .nt.on,#panel .nt.on[class*="c-"]{background:color-mix(in srgb,#c2410c 16%,transparent) !important;text-decoration-color:#c2410c !important}
+#panel{touch-action:manipulation}
+/* the two accent colours, used once per text block */
+.key{color:#c2410c;font-weight:700}
+.warn{color:#b91c1c;font-weight:700}
+/* installed app (home-screen icon): pin the tab bar to the very bottom */
+html.standalone,html.standalone body{height:100vh}
+html.standalone .screen{bottom:auto;height:100vh}
+@media (display-mode: standalone){html,body{height:100vh}.screen{bottom:auto;height:100vh}}
 </style>
 </head>
 <body>
@@ -946,10 +965,10 @@ body.readAid #panel .fx,body.readAid .bkText .fx,.lgTx .fx{font-weight:700}
 
         <h4>Text in the bubbles</h4>
         <div class="lgGrid">
-          <div class="lgRow"><span class="lgTx"><span class="nt mvn c-G">Ne5</span></span><div><b>Dotted underline</b>: a move or square. Tap it to see it on the board. The underline has the colour of its arrow or circle.</div></div>
+          <div class="lgRow"><span class="lgTx"><span class="nt mvn">Ne5</span></span><div><b>Dotted underline</b>: a move or square. Tap it (or close to it) to see it on the board.</div></div>
           <div class="lgRow"><span class="lgTx"><span class="key">outpost</span></span><div><b>Orange</b>: the one core idea of the text (at most one per bubble part)</div></div>
           <div class="lgRow"><span class="lgTx"><span class="warn">threat</span></span><div><b>Red</b>: the one thing to watch out for</div></div>
-          <div class="lgRow"><span class="lgTx"><b class="fx">Fix</b>ation</span><div><b>Bold word starts</b> guide the eye (switch off below)</div></div>
+          <div class="lgRow"><span class="lgTx"><b>Fix</b>ation</span><div><b>Bold word starts</b> guide the eye (off by default, switch on below)</div></div>
         </div>
       </div>
     </section>
@@ -2061,8 +2080,9 @@ function moveListHtml(L, upto, clickable) {
 
 /* ---------- opening menu (side drawer + Train tab) ---------- */
 S.rep = store.get('rep', 'london'); if (!REP[S.rep]) S.rep = 'london';
-S.readAid = store.get('readAid', true); document.body.classList.toggle('readAid', S.readAid);
-{ const rt = document.getElementById('readToggle'); if (rt) { rt.checked = S.readAid; rt.onchange = () => { S.readAid = rt.checked; store.set('readAid', S.readAid); document.body.classList.toggle('readAid', S.readAid); }; } }
+if (navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches)) document.documentElement.classList.add('standalone');
+S.readAid = store.get('readAid2', false); document.body.classList.toggle('readAid', S.readAid);
+{ const rt = document.getElementById('readToggle'); if (rt) { rt.checked = S.readAid; rt.onchange = () => { S.readAid = rt.checked; store.set('readAid2', S.readAid); document.body.classList.toggle('readAid', S.readAid); }; } }
 S.menu = S.rep;
 const lineDone = L => !!(S.prog.mastered[L.id] || ((S.prog.guided || {})[L.id] || 0) >= 2);
 const linePlayed = L => !!((S.prog.guided || {})[L.id]);
@@ -2276,13 +2296,23 @@ function ntShow(node) {
   const keep = boardBase;
   if (was === node) { drawBoard(keep); return; }
   const tg = ntTarget(node.dataset.n || node.textContent); if (!tg) return;
-  const c = (node.className.match(/c-([GBRYO])/) || [0, 'G'])[1];
+  const c = (node.className.match(/c-([GBRYO])/) || [0, 'O'])[1];
   const base = typeof keep.shapes === 'string' ? parseShapes(keep.shapes) : (keep.shapes || []).slice();
   const extra = tg.move ? [{ type: 'arrow', c, from: tg.move.from, to: tg.move.to, thick: true }, { type: 'circle', c, sq: tg.move.to }] : [{ type: 'circle', c, sq: tg.sq }];
   drawBoard(Object.assign({}, keep, { shapes: base.concat(extra), __nt: 1 }));
   ntOn = node; node.classList.add('on');
 }
-document.addEventListener('click', e => { const n = e.target.closest && e.target.closest('#panel .nt'); if (n) { e.preventDefault(); e.stopPropagation(); ntShow(n); } });
+function ntNear(e) {
+  const t = e.target; if (!t.closest) return null;
+  const hit = t.closest('#panel .nt'); if (hit) return hit;
+  const pn = t.closest('#panel'); if (!pn || t.closest('button, a, input')) return null;
+  let best = null, bd = 26;   // px: how far from a move a tap may land and still count
+  pn.querySelectorAll('.nt').forEach(n => { for (const r of n.getClientRects()) {
+    const dx = Math.max(r.left - e.clientX, 0, e.clientX - r.right), dy = Math.max(r.top - e.clientY, 0, e.clientY - r.bottom);
+    const d = Math.hypot(dx, dy * 1.6); if (d < bd) { bd = d; best = n; } } });
+  return best;
+}
+document.addEventListener('click', e => { const n = ntNear(e); if (n) { e.preventDefault(); e.stopPropagation(); ntShow(n); } });
 
 /* ================= STUDY (look closer: step through with every arrow) ================= */
 function startStudy(li, ply = 0) {
@@ -3310,11 +3340,13 @@ function renderGames(b) {
   const box = el('div'); buildOpeningMenu(box, rep, null); b.appendChild(box);
 }
 // ---- Home ----
+// the three calendar squares: trainer, review (spaced review OR mistake drill), puzzles
+const CAL_KEYS = [['o', 'Trainer'], ['r', 'Review or drill'], ['p', 'Puzzles']];
 const DAY_KEYS = [['o', 'Trainer', 'finish a line or lesson'], ['r', 'Review', 'spaced review or mistake drill'], ['p', 'Puzzles', 'solve a puzzle or play a Rush'],
                   ['g', 'Games', 'finish a master game'], ['b', 'Study', 'complete a study card'], ['s', 'Survival', 'finish a survival run']];
 function renderHome(b) {
   const t = today(), st = streak();
-  if (selDay == null || selDay > t) selDay = t;
+  selDay = t;
   const top = el('div', 'mTop', `<div class="streak ${st.n ? '' : 'cold'}"><svg><use href="#i-flame"/></svg><div><b>${st.n}</b><small>day streak${st.grace ? ' · grace day used' : ''}</small></div></div><button class="iconBtn" aria-label="Settings" title="Settings">${icon('gear')}</button>`);
   top.querySelector('.iconBtn').onclick = openSettings;
   b.appendChild(top);
@@ -3322,16 +3354,11 @@ function renderHome(b) {
   for (let k = 0; k < 7; k++) {
     const d = mon + k, r = S.prog.days[d] || {}, fut = d > t;
     const btn = el('button', 'day' + (d === t ? ' today' : '') + (d === selDay ? ' sel' : '') + (fut ? ' future' : '') + (r.open ? ' open' : ''),
-      `<span class="dn">${DOW[k]}</span><span class="dd">${dateOf(d).getUTCDate()}</span><span class="boxes six">${DAY_KEYS.map(([key, name]) => `<i class="${r[key] ? 'on' : ''}" title="${name}"></i>`).join('')}</span>`);
-    if (fut) btn.disabled = true; else btn.onclick = () => { selDay = d; showMenu('home'); };
+      `<span class="dn">${DOW[k]}</span><span class="dd">${dateOf(d).getUTCDate()}</span><span class="boxes">${CAL_KEYS.map(([key, name]) => `<i class="${r[key] ? 'on' : ''}" title="${name}"></i>`).join('')}</span>`);
+    if (fut) btn.disabled = true;
     wk.appendChild(btn);
   }
   b.appendChild(wk);
-  const r = S.prog.days[selDay] || {};
-  const label = selDay === t ? 'Today' : dateOf(selDay).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
-  const goals = DAY_KEYS.filter(([k]) => r[k]).length;
-  b.appendChild(el('div', 'dayCard', `<h3>${label}<small>${goals}/${DAY_KEYS.length} parts${goals === DAY_KEYS.length ? ' · perfect day' : ''}</small></h3>` +
-    DAY_KEYS.map(([k, name, todo]) => `<div class="goal"><i class="${r[k] ? 'on' : ''}"></i><span>${name}</span><small>${r[k] ? (k === 's' ? `${r.s} run${r.s > 1 ? 's' : ''} · best ${r.sb || 0}` : `${r[k]} done`) : selDay === t ? todo : 'not done'}</small></div>`).join('')));
   const td = S.prog.days[t] || {}, bb = el('div', 'bigBtns');
   const big = (cls, ic, title, sub, done, fn) => {
     const x = el('button', 'bigBtn ' + cls, `<span class="bIc">${ic}</span><span><b>${title}</b><small>${sub}</small></span><span class="bx ${done ? 'on' : ''}"></span>`);
@@ -3722,8 +3749,15 @@ function renderPuzzles(b) {
 
 }
 function daumierNote() {
-  const f = el('figure', 'daumier', `<img src="${DAUMIER}" alt="Honoré Daumier, The Chess Players" loading="lazy"><figcaption>Honoré Daumier, <i>The Chess Players</i>, c. 1863</figcaption>`);
-  f.onclick = () => f.classList.toggle('open');
+  const f = el('figure', 'daumier', `<img src="${DAUMIER}" alt="Honoré Daumier, The Chess Players"><figcaption>Honoré Daumier, <i>The Chess Players</i>, c. 1863</figcaption>`);
+  // it sits below the fold and fades/slides in as you scroll down to it
+  requestAnimationFrame(() => {
+    const sc = f.closest('.mScroll'); if (!sc) return;
+    const gap = sc.clientHeight - (f.offsetTop - sc.offsetTop) + 24;
+    f.style.marginTop = Math.max(28, gap) + 'px';
+    const upd = () => { const r = f.getBoundingClientRect(), vh = sc.getBoundingClientRect().bottom; const p = Math.max(0, Math.min(1, (vh - r.top) / (r.height * 0.85))); f.style.setProperty('--rv', p.toFixed(3)); };
+    upd(); sc.addEventListener('scroll', upd, { passive: true });
+  });
   return f;
 }
 
