@@ -316,6 +316,7 @@ body.engOn .mainCol{height:auto;min-height:max-content}
 body.engOn .topZone{flex:none;min-height:0;padding:0}
 body.engOn .topZone:has(.coach:not([hidden]) #panel:not(:empty)){padding:4px 0 8px}
 body.engOn .botZone{flex:none}
+body.engStudy .topZone,body.engStudy .topZone:has(.coach:not([hidden]) #panel:not(:empty)){height:var(--topH);flex:none;padding:4px 0 8px}
 body.engOn #lvArea{display:block;grid-column:-2/-1;justify-self:center;width:calc(var(--cw,480px) + 18px);max-width:100%;padding:2px 0 28px}
 .lvPv{margin:0 0 10px}
 .lvMsg{margin:6px 2px}
@@ -1938,6 +1939,9 @@ function computeSq() {
   S.sq = sq;
   document.documentElement.style.setProperty('--sq', sq + 'px');
   document.documentElement.style.setProperty('--cw', Math.max(8 * sq, Math.min(W, 8 * sq)) + 'px');
+  // the bubble's share of the free space (as the normal layout gives it), used when Study shows the engine
+  const free = Math.max(0, availH - headerH - 8 * sq), share = innerWidth <= 900 ? 1.6 / 2.6 : 0.5;
+  document.documentElement.style.setProperty('--topH', Math.max(minBubble + 12, Math.floor(free * share)) + 'px');
 }
 const sqXY = i => S.flip ? [(7 - (i & 7)) * S.sq, (i >> 3) * S.sq] : [(i & 7) * S.sq, (7 - (i >> 3)) * S.sq];
 
@@ -2508,9 +2512,11 @@ function renderStudy() {
   if (!S.stCur.main) return renderStudyVar(L, T, S.stCur);
   sfStop();
   const i = S.ply;
-  S.engWant = [T.off > 0, false];
+  S.engWant = [T.off > 0, T.off > 0];
+  if (T.off) setEvalBar(S.stCur.ev);
   setHeader(`${L.num}. ${L.name}`, moveStrip(L, i), { cls: 'study pick', text: 'Study ▾' }); bindModePick(L.idx); setProg(i / n);
-  S.engWant = [T.off > 0, false];
+  S.engWant = [T.off > 0, T.off > 0];
+  if (T.off) setEvalBar(S.stCur.ev);
   let shapes = [], last = null, quality = null;
   if (i > 0) { const p = L.plies[i - 1]; shapes = parseShapes(p.shapes); last = p.move; quality = plyQ(p); }
   if (S.studyHint && i < n) shapes = shapes.concat(hintShapes(L.plies[i].move));
@@ -4312,10 +4318,12 @@ function engineHtml(pos, live) {
 // the analysis board and study branches switch them on before drawing.
 const lvArea = $('#lvArea'), evalV = $('#evalV');
 S.engWant = [false, false];
+// engStudy: in Study the bubble keeps a fixed height (the same as without the engine),
+// so moving between book moves and branches never shifts the board.
 function applyEng() {
-  const [eng, ev] = S.engWant, B = document.body;
-  if (B.classList.contains('engOn') === eng && B.classList.contains('evalOn') === ev) return;
-  B.classList.toggle('engOn', eng); B.classList.toggle('evalOn', ev);
+  const [eng, ev] = S.engWant, st = eng && S.mode === 'study', B = document.body;
+  if (B.classList.contains('engOn') === eng && B.classList.contains('evalOn') === ev && B.classList.contains('engStudy') === st) return;
+  B.classList.toggle('engOn', eng); B.classList.toggle('evalOn', ev); B.classList.toggle('engStudy', st);
   if (!eng) $('.layout').scrollTop = 0;
   computeSq();
 }
@@ -4475,12 +4483,15 @@ function renderStudyVar(L, T, n) {
   setHeader(`${L.num}. ${L.name}`, moveStrip(L, bp.ply), { cls: 'study pick', text: 'Study ▾' }); bindModePick(L.idx); setProg(bp.ply / L.plies.length);
   S.engWant = [true, !over];
   setEvalBar(live[0]);
+  // The bubble stays for the whole branch, so nothing jumps: the explanation of the move that left the book
+  // (when it was our move), otherwise the book move at the point where the branch started.
   let quality = null, bubble = '';
-  const first = n.parent && n.parent.main, bookPly = first ? L.plies[n.parent.ply] : null;
-  if (first && bookPly && n.white === (L.side === 'w')) {
-    if (!n.expl) n.expl = analyseMistake(n.parent.pos, n.move, bookPly.move, linePre(L)[n.parent.ply], plyText(L, n.parent.ply), L);
-    bubble = n.expl.html; quality = n.expl.q;
-  }
+  const first = (() => { let x = n; while (x.parent && !x.parent.main) x = x.parent; return x; })();
+  const bookPly = L.plies[bp.ply];
+  if (bookPly && first.white === (L.side === 'w')) {
+    if (!first.expl) first.expl = analyseMistake(bp.pos, first.move, bookPly.move, linePre(L)[bp.ply], plyText(L, bp.ply), L);
+    bubble = first.expl.html; if (first === n) quality = first.expl.q;
+  } else bubble = `<div class="expl">${bookPly ? plyHtml(L, bp.ply + 1, '<span class="tag">Book move here</span>') : plyHtml(L, bp.ply)}</div>`;
   anDraw({ pos, last: n.move, quality, shapes: anArrows(pos, live) });
   setPanel(bubble);
   renderLv(T, n, engineHtml(pos, live), '', stGo, stPlayUci);
