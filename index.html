@@ -303,6 +303,40 @@ button.modeBadge.pick:hover{filter:brightness(1.12)}
 .anTools{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .anTools .btn{min-height:34px;padding:5px 10px;font-size:13px}
 .anBox code{font-size:11.5px;word-break:break-all}
+/* engine screens: vertical eval bar, page scrolls to the move list (Lichess style) */
+#evalV{display:none}
+body.evalOn #boardWrap{display:flex;gap:6px;width:auto}
+body.evalOn #evalV{display:block;position:relative;flex:none;width:12px;height:calc(var(--sq)*8);border-radius:4px;overflow:hidden;background:#403d39}
+#evalV i{position:absolute;left:0;right:0;bottom:0;height:50%;background:#f2f2ee;transition:height .35s ease}
+#evalV.flip i{bottom:auto;top:0}
+#evalV::after{content:"";position:absolute;left:0;right:0;top:50%;height:2px;margin-top:-1px;background:rgba(214,79,0,.55)}
+#lvArea{display:none}
+body.engOn .layout{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;grid-template-rows:max-content max-content;align-content:start}
+body.engOn .mainCol{height:auto;min-height:max-content}
+body.engOn .topZone{flex:none;min-height:0;padding:0}
+body.engOn .topZone:has(.coach:not([hidden]) #panel:not(:empty)){padding:4px 0 8px}
+body.engOn .botZone{flex:none}
+body.engOn #lvArea{display:block;grid-column:-2/-1;justify-self:center;width:calc(var(--cw,480px) + 18px);max-width:100%;padding:2px 0 28px}
+.lvPv{margin:0 0 10px}
+.lvMsg{margin:6px 2px}
+.lvList{border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--surface,#fff);color:var(--ink)}
+.lvRow{display:grid;grid-template-columns:2.6em 1fr 1fr;border-bottom:1px solid var(--line)}
+.lvRow:last-child{border-bottom:0}
+.lvN{display:grid;place-items:center;background:var(--surface2,#f0eee9);color:var(--muted);font-size:13px}
+.lvM{display:flex;justify-content:space-between;align-items:center;gap:6px;border:0;background:transparent;color:var(--ink);font:inherit;font-size:15.5px;font-weight:600;padding:7px 10px;text-align:left;cursor:pointer;min-height:36px}
+.lvM i{font-style:normal;font-weight:400;font-size:11.5px;color:var(--muted)}
+.lvM.dots{color:var(--muted);cursor:default;font-weight:400}
+.lvM.on,.lvV.on{background:#3692e7;color:#fff}
+.lvM.on i,.lvV.on b{color:#e8f1fc}
+.lvVars{background:var(--surface2,#f0eee9);padding:5px 8px 7px 6px;border-bottom:1px solid var(--line);font-size:14px;line-height:1.75}
+.lvLine{position:relative;padding-left:16px}
+.lvLine::before{content:"";position:absolute;left:4px;top:-2px;height:14px;width:8px;border-left:1px solid var(--muted);border-bottom:1px solid var(--muted);opacity:.55}
+.lvFork{margin-left:12px}
+.lvV{border:0;background:transparent;color:var(--ink);font:inherit;padding:1px 3px;border-radius:4px;cursor:pointer}
+.lvV b{font-weight:400;color:var(--muted);margin-right:2px}
+.lvPar{color:var(--muted);font-style:italic;margin:0 2px}
+.lvPar .lvV{font-style:italic;color:var(--muted)}
+#lvArea .anTools{margin-top:12px}
 .engRow{margin:0 0 14px}
 .engRow b{display:block;font-size:14px}
 .engRow small{display:block;color:var(--muted);font-size:12.5px;line-height:1.35;margin:2px 0 7px}
@@ -956,9 +990,10 @@ html.standalone .screen{bottom:auto;height:100vh}
     <main class="mainCol">
       <div id="lineHeader"></div>
       <div class="topZone"><div class="coach"><div class="coachAv" aria-hidden="true"><svg viewBox="0 0 45 45"><g transform="translate(0,1)" fill="none" stroke="#17110A" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"><path fill="#fff" d="M22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21"/><path fill="#fff" d="M24 18c.38 2.91-5.55 7.37-8 9-3 2-2.82 4.34-5 4-1.042-.94 1.41-3.04 0-3-1 0 .19 1.23-1 2-1 0-4.003 1-4-4 0-2 6-12 6-12s1.89-1.9 2-3.5c-.73-.994-.5-2-.5-3 1-1 3 2.5 3 2.5h2s.78-1.992 2.5-3c1 0 1 3 1 3"/><path fill="#17110A" d="M9.5 25.5a.5.5 0 1 1-1 0 .5.5 0 1 1 1 0m5.433-9.75a.5 1.5 30 1 1-.866-.5.5 1.5 30 1 1 .866.5"/></g></svg></div><div id="panel"></div></div></div>
-      <div id="boardWrap"><div id="board"></div></div>
-      <div class="botZone"><div id="controls"></div><div id="vtree" hidden></div></div>
+      <div id="boardWrap"><div id="evalV" aria-hidden="true"><i></i></div><div id="board"></div></div>
+      <div class="botZone"><div id="controls"></div></div>
     </main>
+    <section id="lvArea" aria-label="Moves and engine lines"></section>
   </div>
 </div>
 
@@ -1890,10 +1925,12 @@ let boardState = { pos: null, shapes: '', last: null, quality: null, selected: -
 function computeSq() {
   const col = $('.mainCol');
   if (!col || !col.clientHeight) return;
-  const W = Math.min(col.clientWidth, 720);
+  const W = Math.min(col.clientWidth, 720) - (document.body.classList.contains('evalOn') ? 18 : 0);
   const headerH = Math.max(header.offsetHeight || 0, 50);
   const ctrlH = 46 + 8;
-  const availH = col.clientHeight;
+  // on engine screens the page scrolls, so size the board from the visible height, not the column
+  const lay = $('.layout'), engOn = document.body.classList.contains('engOn');
+  const availH = engOn && lay ? lay.clientHeight - 20 : col.clientHeight;
   const minBubble = Math.max(92, Math.min(170, availH * 0.17));
   // space above and below the board is shared evenly, so each side must fit the bubble / the buttons
   const byHeight = availH - headerH - 4 - 2 * Math.max(minBubble + 8, ctrlH + 6);
@@ -1905,7 +1942,7 @@ function computeSq() {
 const sqXY = i => S.flip ? [(7 - (i & 7)) * S.sq, (i >> 3) * S.sq] : [(i & 7) * S.sq, (7 - (i >> 3)) * S.sq];
 
 function drawBoard(opts) {
-  if (!opts.__nt) { boardBase = opts; ntOn = null; segOn = null; }
+  if (!opts.__nt) { boardBase = opts; ntOn = null; segOn = null; if (typeof applyEng === 'function') applyEng(); }
   boardState = Object.assign({ pos: null, shapes: '', last: null, quality: null, selected: -1, dots: [], hl: [] }, opts);
   const { pos } = boardState;
   boardEl.innerHTML = '';
@@ -2004,7 +2041,7 @@ function drawShapes(shapes) {
     ln.setAttribute('stroke-linecap', s.dashed ? 'butt' : 'round');
     if (s.dashed) ln.setAttribute('stroke-dasharray', s.thick ? '0.32 0.2' : '0.24 0.16');
     ln.setAttribute('marker-end', `url(#ah${s.c}${s.thick ? 1 : 0})`);
-    ln.setAttribute('opacity', s.op != null ? s.op : 0.85);
+    ln.setAttribute('opacity', s.op != null ? s.op : 0.62);
     svg.appendChild(ln);
   }
   return svg;
@@ -2107,7 +2144,7 @@ function btnLabel(full, short) { return short && short !== full ? `<span class="
 // thin amber bar under the top bar: how far through the current line / lesson you are
 function setProg(frac) { const t = $('#tProg'); if (!t) return; t.classList.toggle('on', frac != null); t.firstChild.style.width = frac == null ? '0' : Math.round(100 * Math.max(0, Math.min(1, frac))) + '%'; }
 function setHeader(title, sub, badge) {
-  { const vt = document.getElementById('vtree'); if (vt) vt.hidden = true; }
+  S.engWant = [false, false];
   setProg(null); document.body.classList.remove('readCard');
   header.innerHTML = `<div class="hTitle">${title}</div><div class="hSub">${badge ? (/\bpick\b/.test(badge.cls) ? `<button class="modeBadge ${badge.cls}" title="Change training mode">${badge.text}</button>` : `<span class="modeBadge ${badge.cls}">${badge.text}</span>`) : ''}${sub || ''}</div>`;
 }
@@ -2471,7 +2508,9 @@ function renderStudy() {
   if (!S.stCur.main) return renderStudyVar(L, T, S.stCur);
   sfStop();
   const i = S.ply;
+  S.engWant = [T.off > 0, false];
   setHeader(`${L.num}. ${L.name}`, moveStrip(L, i), { cls: 'study pick', text: 'Study ▾' }); bindModePick(L.idx); setProg(i / n);
+  S.engWant = [T.off > 0, false];
   let shapes = [], last = null, quality = null;
   if (i > 0) { const p = L.plies[i - 1]; shapes = parseShapes(p.shapes); last = p.move; quality = plyQ(p); }
   if (S.studyHint && i < n) shapes = shapes.concat(hintShapes(L.plies[i].move));
@@ -2491,7 +2530,7 @@ function renderStudy() {
   panel.scrollTop = 0;
   // any move on the board: the book move goes on, anything else starts a branch with Stockfish
   S.input = m => onStudyMove(m);
-  renderVtree(T, S.stCur);
+  if (T.off) renderLv(T, S.stCur, null, '', stGo, stPlayUci);
 }
 // the hint: highlight the square the piece comes from and the move itself
 const hintShapes = mv => [{ type: 'circle', c: 'Y', sq: mv.from }, { type: 'arrow', c: 'Y', from: mv.from, to: mv.to, thick: true }];
@@ -4233,7 +4272,7 @@ function anPvSan(pos, pv, max) {
 }
 // one arrow per engine line, all in the same blue (like Lichess): the best move is the most solid
 // and slightly the widest, every next line is fainter and a little thinner
-const AN_OP = [0.9, 0.6, 0.45, 0.36, 0.3], AN_W = [15, 12, 10, 9, 8].map(x => x / 64);   // widths in Lichess units (1/64 of a square)
+const AN_OP = [0.68, 0.46, 0.36, 0.29, 0.24], AN_W = [15, 12, 10, 9, 8].map(x => x / 64);   // widths in Lichess units (1/64 of a square)
 function anArrows(pos, live) {
   const shapes = [], seen = {};
   live.forEach((l, k) => {
@@ -4246,7 +4285,8 @@ function anArrows(pos, live) {
 // redraw the board only when something on it changed (keeps taps and drags alive while the engine streams)
 let anBoardKey = '';
 function anDraw(opts) {
-  const key = C.toFen(opts.pos) + '|' + (opts.last ? opts.last.from + '-' + opts.last.to : '') + '|' + JSON.stringify(opts.shapes || '') + '|' + S.flip + '|' + S.sq;
+  applyEng();
+  const key = C.toFen(opts.pos) + '|' + (opts.last ? opts.last.from + '-' + opts.last.to : '') + '|' + (opts.quality || '') + '|' + JSON.stringify(opts.shapes || '') + '|' + S.flip + '|' + S.sq;
   if (key === anBoardKey && boardEl.firstChild && boardState.pos === opts.pos) return;
   anBoardKey = key; drawBoard(opts);
 }
@@ -4256,36 +4296,112 @@ const engStatus = (pos, live) => {
   if (SF.failed) return 'engine off';
   return live[0] ? `${anFmt(live[0])} · depth ${SF.depth}${SF.done ? '' : '…'}` : '…';
 };
-// the eval bar + engine lines block, shared by the analysis board and study variations
+// the engine lines, shared by the analysis board and study branches (shown under the buttons)
 function engineHtml(pos, live) {
   const over = !C.legal(pos).length;
-  if (over) return `<div class="explHead"><span class="tag ${C.inCheck(pos) ? 'q-blunder' : ''}">${C.inCheck(pos) ? `Checkmate: ${sideName(pos.turn === 'w' ? 'b' : 'w')} wins` : 'Stalemate: draw'}</span></div>`;
-  if (SF.failed) return '<p class="muted">The engine could not start on this device. You can still move pieces and explore.</p>';
-  if (!SF.ready) return '<p class="muted">Starting Stockfish… (the first time needs the internet to download the engine, about 1.9 MB; after that it works offline)</p>';
-  if (!live.length) return '<p class="muted">Thinking…</p>';
-  let h = `<div class="anBar" title="Evaluation from White’s side"><i style="width:${anBar(live[0])}%"></i><span>${anFmt(live[0])}</span></div>`;
-  h += '<div class="anLines">' + live.map(l => `<button class="anLine" data-u="${l.pv[0]}"><span class="anEv">${anFmt(l)}</span><span class="anPv">${anPvSan(pos, l.pv, 8)}</span></button>`).join('') + '</div>';
-  return h;
+  if (over) return `<div class="lvMsg"><span class="tag ${C.inCheck(pos) ? 'q-blunder' : ''}">${C.inCheck(pos) ? `Checkmate: ${sideName(pos.turn === 'w' ? 'b' : 'w')} wins` : 'Stalemate: draw'}</span></div>`;
+  if (SF.failed) return '<p class="lvMsg muted">The engine could not start on this device. You can still move pieces and explore.</p>';
+  if (!SF.ready) return '<p class="lvMsg muted">Starting Stockfish… (the first time needs the internet to download the engine, about 1.9 MB; after that it works offline)</p>';
+  if (!live.length) return '<p class="lvMsg muted">Thinking…</p>';
+  return '<div class="anLines">' + live.map(l => `<button class="anLine" data-u="${l.pv[0]}"><span class="anEv">${anFmt(l)}</span><span class="anPv">${anPvSan(pos, l.pv, 8)}</span></button>`).join('') + '</div>';
 }
+
+/* ---------- engine screen layout ---------- */
+// engOn: the page scrolls, and the move list + engine lines sit below the buttons.
+// evalOn: the vertical eval bar next to the board. Every screen starts with both off (setHeader);
+// the analysis board and study branches switch them on before drawing.
+const lvArea = $('#lvArea'), evalV = $('#evalV');
+S.engWant = [false, false];
+function applyEng() {
+  const [eng, ev] = S.engWant, B = document.body;
+  if (B.classList.contains('engOn') === eng && B.classList.contains('evalOn') === ev) return;
+  B.classList.toggle('engOn', eng); B.classList.toggle('evalOn', ev);
+  if (!eng) $('.layout').scrollTop = 0;
+  computeSq();
+}
+function setEvalBar(l) {
+  if (!evalV) return;
+  const w = anBar(l);
+  evalV.firstChild.style.height = (S.flip ? 100 - w : w) + '%';
+  evalV.classList.toggle('flip', S.flip);
+  evalV.title = l ? 'Evaluation ' + anFmt(l) : '';
+}
+
+/* ---------- move trees (analysis board and study) ---------- */
+// kids[0] is the main continuation of a node; any other kid is a branch.
+function mkTree(pos) {
+  const T = { nodes: [], off: 0 };
+  T.add = n => { n.id = T.nodes.length; n.kids = []; T.nodes.push(n); if (n.parent) n.parent.kids.push(n); if (!n.main) T.off++; return n; };
+  T.root = T.add({ pos, parent: null, main: true, ply: 0 });
+  return T;
+}
+function treeChild(T, cur, m) {
+  const u = C.uci(m);
+  return cur.kids.find(x => x.uci === u) || T.add({ pos: C.make(cur.pos, m), move: m, uci: u, san: C.san(cur.pos, m), num: cur.pos.full, white: cur.pos.turn === 'w', parent: cur, main: false });
+}
+const evTxt = e => !e ? '' : e.mate != null ? (e.mate > 0 ? '#' + e.mate : '#−' + Math.abs(e.mate)) : (e.cp >= 0 ? '+' : '−') + (Math.abs(e.cp) / 100).toFixed(1);
+// Lichess-style move list: the main line in rows (number | White | Black, with evals),
+// branches as indented lines between the rows; a fork inside a branch splits into indented lines,
+// a single one-move alternative stays inline in brackets.
+function lvHtml(T, cur) {
+  const sup = n => n.ann ? `<sup>${n.ann}</sup>` : '';
+  const cell = n => `<button class="lvM${n === cur ? ' on' : ''}" data-id="${n.id}"><span>${n.san}${sup(n)}</span>${n.ev ? `<i>${evTxt(n.ev)}</i>` : ''}</button>`;
+  const dots = '<span class="lvM dots">…</span>';
+  const vm = (n, num) => `<button class="lvV${n === cur ? ' on' : ''}" data-id="${n.id}">${num || n.white ? `<b>${n.num}${n.white ? '.' : '…'}</b>` : ''}${n.san}${sup(n)}</button>`;
+  const vline = (n) => {
+    let h = vm(n, true), x = n;
+    while (x.kids.length) {
+      const [first, ...alts] = x.kids;
+      if (!alts.length) { h += vm(first, false); x = first; continue; }
+      if (alts.length === 1 && !alts[0].kids.length) { h += vm(first, false) + `<span class="lvPar">(${vm(alts[0], true)})</span>`; x = first; continue; }
+      return h + `<div class="lvFork">${x.kids.map(k => `<div class="lvLine">${vline(k)}</div>`).join('')}</div>`;
+    }
+    return h;
+  };
+  const vars = alts => `<div class="lvVars">${alts.map(a => `<div class="lvLine">${vline(a)}</div>`).join('')}</div>`;
+  let h = '', n = T.root, open = false;
+  while (n.kids.length) {
+    const [m, ...alts] = n.kids;
+    if (m.white) {
+      h += `<div class="lvRow"><span class="lvN">${m.num}</span>${cell(m)}`; open = true;
+      if (alts.length) { h += dots + '</div>' + vars(alts); open = false; }
+    } else {
+      if (!open) h += `<div class="lvRow"><span class="lvN">${m.num}</span>${dots}`;
+      h += cell(m) + '</div>'; open = false;
+      if (alts.length) h += vars(alts);
+    }
+    n = m;
+  }
+  if (open) h += '<span class="lvM dots"></span></div>';
+  return `<div class="lvList">${h || '<p class="lvMsg muted">Make a move on the board.</p>'}</div>`;
+}
+// fill the area under the buttons: engine lines, move list, extra tools
+function renderLv(T, cur, enginePart, tools, go, playUci) {
+  const h = (enginePart != null ? `<div class="lvPv">${enginePart}</div>` : '') + lvHtml(T, cur) + (tools || '');
+  if (lvArea.innerHTML !== h) {
+    lvArea.innerHTML = h;
+    lvArea.querySelectorAll('[data-id]').forEach(b => b.onclick = () => go(T.nodes[+b.dataset.id]));
+    lvArea.querySelectorAll('.anLine').forEach(b => b.onclick = () => playUci(b.dataset.u));
+  }
+}
+// remember the engine's eval on the node it belongs to, for the move list
+function noteEval(n, live) { if (live[0] && n.parent) n.ev = { cp: live[0].cp, mate: live[0].mate }; }
 
 /* ---------- the analysis board (Home → Analysis board, or the magnifier in the top bar) ---------- */
 function startAnalysis(pos, from) {
   pos = pos || C.parseFen(C.START);
   S.mode = 'an'; S.input = null; showTrainer();
-  S.an = { ps: [pos], ms: [], i: 0, engine: S.an ? S.an.engine : true, from: from || null };
+  const T = mkTree(pos);
+  S.an = { T, cur: T.root, engine: S.an ? S.an.engine : true, from: from || null, note: '' };
   if (!from || from === 'fen') S.flip = from === 'fen' && pos.turn === 'b';
   anBoardKey = '';
   renderSidebar(); $('#tbTitle').textContent = 'Analysis board';
   renderAn();
 }
-function anGo(i) { const a = S.an; a.i = Math.max(0, Math.min(a.ps.length - 1, i)); renderAn(); }
-function onAnMove(m) {
-  const a = S.an, p = a.ps[a.i];
-  a.ps = a.ps.slice(0, a.i + 1); a.ms = a.ms.slice(0, a.i);
-  a.ps.push(C.make(p, m)); a.ms.push(m); a.i++;
-  renderAn();
-}
-function anPlayUci(u) { const p = S.an.ps[S.an.i], m = C.parse(p, u); if (m) onAnMove(m); }
+function anGoNode(n) { if (n) { S.an.cur = n; S.an.note = ''; renderAn(); } }
+function anGo(d) { const c = S.an.cur; anGoNode(d < 0 ? c.parent : c.kids[0]); }
+function onAnMove(m) { anGoNode(treeChild(S.an.T, S.an.cur, m)); }
+function anPlayUci(u) { const m = C.parse(S.an.cur.pos, u); if (m) onAnMove(m); }
 function anPasteFen() {
   const t = prompt('Paste a position (FEN):', '');
   if (!t) return;
@@ -4297,44 +4413,36 @@ function anPasteFen() {
   } catch (e) { alert('That position could not be read: ' + e.message); }
 }
 function anCopyFen() {
-  const fen = C.toFen(S.an.ps[S.an.i]);
-  const done = () => renderAn('Position copied: <code>' + esc(fen) + '</code>');
+  const fen = C.toFen(S.an.cur.pos);
+  const done = () => { S.an.note = 'Position copied: <code>' + esc(fen) + '</code>'; renderAn(); };
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(fen).then(done, () => prompt('Copy this position (FEN):', fen));
   else prompt('Copy this position (FEN):', fen);
 }
-function renderAn(note) {
-  const a = S.an, pos = a.ps[a.i];
+function renderAn() {
+  const a = S.an, n = a.cur, pos = n.pos;
   a.fen = C.toFen(pos);
   const over = !C.legal(pos).length;
-  if (a.engine && !over) { sfAnalyse(a.fen); SF.view = { fen: a.fen, fn: () => { if (S.mode === 'an' && S.an === a && a.fen === SF.view.fen) renderAn(); } }; }
+  if (a.engine && !over) { sfAnalyse(a.fen); SF.view = { fen: a.fen, fn: () => { if (S.mode === 'an' && S.an === a && a.cur === n) renderAn(); } }; }
   else sfStop();
   const live = a.engine && !over ? sfLive(a.fen) : [];
+  noteEval(n, live);
   setHeader('Analysis board', `<span class="grp">${sideName(pos.turn)} to move · ${a.engine || over ? engStatus(pos, live) : 'engine paused'}</span>`, { cls: 'learn', text: 'Stockfish 19' });
-  anDraw({ pos, last: a.i ? a.ms[a.i - 1] : null, shapes: anArrows(pos, live) });
-  let h = '<div class="expl anBox">';
-  h += a.engine || over ? engineHtml(pos, live) : '<p class="muted">The engine is paused. Tap <b>Run engine</b> to analyse this position.</p>';
-  if (live.length) h += '<p class="muted small">Tap a line to play its first move. Scores are from White’s side: + is good for White, − for Black.</p>';
-  if (a.ms.length) {
-    let p = a.ps[0]; const parts = [];
-    a.ms.forEach((m, j) => {
-      const s = C.san(p, m), lab = p.turn === 'w' ? `${p.full}. ${s}` : (j ? s : `${p.full}… ${s}`);
-      parts.push(`<button class="anMv${j + 1 === a.i ? ' on' : ''}" data-i="${j + 1}">${lab}</button>`); p = a.ps[j + 1];
-    });
-    h += `<div class="anMoves"><button class="anMv${a.i === 0 ? ' on' : ''}" data-i="0">Start</button>${parts.join('')}</div>`;
+  S.engWant = [true, a.engine && !over];
+  setEvalBar(live[0]);
+  anDraw({ pos, last: n.move || null, shapes: anArrows(pos, live) });
+  setPanel('');
+  const tools = `${a.note ? `<p class="lvMsg small">${a.note}</p>` : ''}<div class="anTools"><button class="btn" data-act="start">New board</button><button class="btn" data-act="paste">Paste FEN</button><button class="btn" data-act="copy">Copy FEN</button></div>`;
+  renderLv(a.T, n, a.engine || over ? engineHtml(pos, live) : '<p class="lvMsg muted">The engine is paused.</p>', tools, anGoNode, anPlayUci);
+  const t = lvArea.querySelector('[data-act=start]');
+  if (t && !t.onclick) {
+    t.onclick = () => startAnalysis(null);
+    lvArea.querySelector('[data-act=paste]').onclick = anPasteFen;
+    lvArea.querySelector('[data-act=copy]').onclick = anCopyFen;
   }
-  if (note) h += `<p class="small">${note}</p>`;
-  h += `<div class="anTools"><button class="btn" data-act="start">New board</button><button class="btn" data-act="paste">Paste FEN</button><button class="btn" data-act="copy">Copy FEN</button></div>`;
-  h += '</div>';
-  setPanel(h);
-  panel.querySelectorAll('.anLine').forEach(b => b.onclick = () => anPlayUci(b.dataset.u));
-  panel.querySelectorAll('.anMv').forEach(b => b.onclick = () => anGo(+b.dataset.i));
-  panel.querySelector('[data-act=start]').onclick = () => startAnalysis(null);
-  panel.querySelector('[data-act=paste]').onclick = anPasteFen;
-  panel.querySelector('[data-act=copy]').onclick = anCopyFen;
   S.input = over ? null : (m => onAnMove(m));
   setNav({ icon: null, label: '⇅', title: 'Flip the board', onClick: () => { S.flip = !S.flip; renderAn(); } },
     { label: a.engine ? 'Pause engine' : 'Run engine', cls: a.engine ? '' : 'primary', onClick: () => { a.engine = !a.engine; renderAn(); } },
-    { disabled: a.i === 0, onClick: () => anGo(a.i - 1) }, { disabled: a.i >= a.ps.length - 1, onClick: () => anGo(a.i + 1) });
+    { disabled: !n.parent, onClick: () => anGo(-1) }, { disabled: !n.kids.length, onClick: () => anGo(1) });
 }
 
 /* ---------- Study mode: play your own moves, branch off the book line, see Stockfish ---------- */
@@ -4343,63 +4451,39 @@ function renderAn(note) {
 const TREES = {};
 function stTree(L) {
   if (TREES[L.id]) return TREES[L.id];
-  const T = { nodes: [], vars: 0 };
-  const add = (n) => { n.id = T.nodes.length; n.kids = []; T.nodes.push(n); if (n.parent) n.parent.kids.push(n); return n; };
-  let prev = add({ pos: L.positions[0], parent: null, main: true, ply: 0 });
-  L.plies.forEach((p, i) => { prev = add({ pos: L.positions[i + 1], move: p.move, uci: p.uci, san: p.san, ann: p.ann, num: p.num, white: p.white, parent: prev, main: true, ply: i + 1 }); });
-  T.add = add;
+  const T = mkTree(L.positions[0]);
+  let prev = T.root;
+  L.plies.forEach((p, i) => {
+    const ev = evalAfterPly(L, i);
+    prev = T.add({ pos: L.positions[i + 1], move: p.move, uci: p.uci, san: p.san, ann: p.ann, num: p.num, white: p.white, parent: prev, main: true, ply: i + 1,
+      ev: ev == null ? null : Math.abs(ev) >= 9000 ? { mate: ev > 0 ? 1 : -1 } : { cp: ev } });
+  });
   return TREES[L.id] = T;
 }
 const branchPoint = n => { while (n && !n.main) n = n.parent; return n; };
-function onStudyMove(m) {
-  const L = LINES[S.li], T = stTree(L), cur = S.stCur, u = C.uci(m);
-  let k = cur.kids.find(x => x.uci === u);
-  if (!k) { k = T.add({ pos: C.make(cur.pos, m), move: m, uci: u, san: C.san(cur.pos, m), num: cur.pos.full, white: cur.pos.turn === 'w', parent: cur, main: false }); T.vars++; }
-  stGo(k);
-}
-function stGo(n) { S.stCur = n; if (n.main) S.ply = n.ply; S.studyHint = false; renderStudy(); }
-// the move tree under the buttons: book line, with every branch indented under the move it starts from
-const vtreeEl = $('#vtree');
-function vtreeHtml(T, cur) {
-  const mv = (n, num) => `<button class="vtMv${n.main ? ' main' : ''}${n === cur ? ' on' : ''}" data-id="${n.id}">${num || n.white ? `<span class="vtN">${n.num}${n.white ? '.' : '…'}</span>` : ''}${n.san}${n.ann ? `<sup>${n.ann}</sup>` : ''}</button>`;
-  const run = (start) => {
-    let h = '', n = start, num = true;
-    while (n.kids.length) {
-      const [first, ...alts] = n.kids;
-      h += mv(first, num); num = false;
-      if (alts.length) { alts.forEach(a => { h += `<div class="vtVar">${mv(a, true)}${run(a)}</div>`; }); num = true; }
-      n = first;
-    }
-    return h;
-  };
-  return `<div class="vtHead">Moves &amp; branches</div><div class="vtBody">${run(T.nodes[0])}</div>`;
-}
-function renderVtree(T, cur) {
-  if (!vtreeEl) return;
-  if (!T.vars) { vtreeEl.hidden = true; return; }
-  const h = vtreeHtml(T, cur);
-  vtreeEl.hidden = false;
-  if (vtreeEl.innerHTML !== h) {
-    vtreeEl.innerHTML = h;
-    vtreeEl.querySelectorAll('.vtMv').forEach(b => b.onclick = () => stGo(T.nodes[+b.dataset.id]));
-    const on = vtreeEl.querySelector('.vtMv.on');
-    if (on) { const r = on.offsetTop - vtreeEl.offsetTop; if (r < vtreeEl.scrollTop || r > vtreeEl.scrollTop + vtreeEl.clientHeight - 30) vtreeEl.scrollTop = Math.max(0, r - 40); }
-  }
-}
-// a position off the book line: Stockfish arrows and lines, Return to the book line
+function onStudyMove(m) { stGo(treeChild(stTree(LINES[S.li]), S.stCur, m)); }
+function stGo(n) { if (!n) return; S.stCur = n; if (n.main) S.ply = n.ply; S.studyHint = false; renderStudy(); }
+const stPlayUci = u => { const m = C.parse(S.stCur.pos, u); if (m) onStudyMove(m); };
+// a position off the book line: Stockfish arrows, eval bar and lines; ↩ returns to the book line.
+// Right after leaving the book with our own move, the bubble explains that move like guided mode does
+// (playable alternative or mistake, the likely reply, and the book move).
 function renderStudyVar(L, T, n) {
   const pos = n.pos, fen = C.toFen(pos), bp = branchPoint(n), over = !C.legal(pos).length;
   if (!over) { sfAnalyse(fen); SF.view = { fen, fn: () => { if (S.mode === 'study' && S.stCur === n) renderStudy(); } }; } else sfStop();
   const live = over ? [] : sfLive(fen);
+  noteEval(n, live);
   setHeader(`${L.num}. ${L.name}`, moveStrip(L, bp.ply), { cls: 'study pick', text: 'Study ▾' }); bindModePick(L.idx); setProg(bp.ply / L.plies.length);
-  anDraw({ pos, last: n.move, shapes: anArrows(pos, live) });
-  const first = (() => { let x = n; while (x.parent && !x.parent.main) x = x.parent; return x; })();
-  const lab = `${n.num}${n.white ? '.' : '…'} ${n.san}`;
-  let h = `<div class="expl anBox"><div class="exPart"><div class="explHead"><span class="mvBig">${lab}</span><span class="side ${n.white ? 'w' : 'b'}">${n.white ? 'White' : 'Black'}</span><span class="tag q-good">Your branch</span>${live[0] ? `<span class="anEv">${anFmt(live[0])}</span>` : ''}</div>`;
-  h += `<p class="muted small">Off the book line since ${first.num}${first.white ? '.' : '…'} ${first.san}. The arrows are Stockfish’s best moves: the most solid one is the best. Make any move to continue, or tap <b>↩</b> to return to the book line.</p>`;
-  h += engineHtml(pos, live) + '</div></div>';
-  setPanel(h);
-  panel.querySelectorAll('.anLine').forEach(b => b.onclick = () => { const m = C.parse(pos, b.dataset.u); if (m) onStudyMove(m); });
+  S.engWant = [true, !over];
+  setEvalBar(live[0]);
+  let quality = null, bubble = '';
+  const first = n.parent && n.parent.main, bookPly = first ? L.plies[n.parent.ply] : null;
+  if (first && bookPly && n.white === (L.side === 'w')) {
+    if (!n.expl) n.expl = analyseMistake(n.parent.pos, n.move, bookPly.move, linePre(L)[n.parent.ply], plyText(L, n.parent.ply), L);
+    bubble = n.expl.html; quality = n.expl.q;
+  }
+  anDraw({ pos, last: n.move, quality, shapes: anArrows(pos, live) });
+  setPanel(bubble);
+  renderLv(T, n, engineHtml(pos, live), '', stGo, stPlayUci);
   S.input = over ? null : (m => onStudyMove(m));
   setNav({ icon: null, label: '↩', cls: 'hintBtn retBtn', title: 'Return to the book line', onClick: () => stGo(bp) },
     { label: 'Play it', short: 'Play it', title: 'Play this line yourself (guided)', onClick: () => startGuided(S.li) },
@@ -4409,7 +4493,6 @@ function renderStudyVar(L, T, n) {
   strip.querySelectorAll('[data-ply]').forEach(x => x.onclick = () => stGo(T.nodes[+x.dataset.ply]));
   const cur = strip.querySelector('.cur');
   strip.scrollLeft = cur ? cur.offsetLeft - strip.clientWidth / 2 + cur.offsetWidth / 2 : 0;
-  renderVtree(T, n);
 }
 
 /* ---------- engine settings (Settings → Analysis engine) ---------- */
@@ -4469,8 +4552,8 @@ document.addEventListener('keydown', e => {
     if (e.key === 'ArrowRight' && S.gm.ply < n) { S.gm.ply++; renderGame(); }
     if (e.key === 'ArrowLeft' && S.gm.ply > 0) { S.gm.ply--; renderGame(); }
   } else if (S.mode === 'an') {
-    if (e.key === 'ArrowRight') anGo(S.an.i + 1);
-    if (e.key === 'ArrowLeft') anGo(S.an.i - 1);
+    if (e.key === 'ArrowRight') anGo(1);
+    if (e.key === 'ArrowLeft') anGo(-1);
   } else if (S.mode === 'learn-concept') {
     const n = LESSONS[S.lessonIdx].slides.length;
     if (e.key === 'ArrowRight' && S.slide < n - 1) { S.slide++; renderConcept(); }
